@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline Student Attendance Tracker</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --present: #22c55e;
+            --absent: #ef4444;
+            --late: #f59e0b;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 16px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: var(--card);
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 16px;
+        }
+
+        label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        select, input, button {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 1rem;
+            margin-bottom: 12px;
+        }
+
+        .student-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .student-controls input {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .student-controls button {
+            width: auto;
+            background: var(--primary);
+            color: white;
+            border: none;
+            font-weight: 600;
+            margin-bottom: 0;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .calendar-header button {
+            width: auto;
+            padding: 6px 12px;
+            margin-bottom: 0;
+            background: #e2e8f0;
+            border: none;
+            font-weight: bold;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+            text-align: center;
+        }
+
+        .day-name {
+            font-weight: bold;
+            font-size: 0.8rem;
+            color: #64748b;
+            padding: 4px 0;
+        }
+
+        .day-cell {
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            user-select: none;
+            background: #fff;
+        }
+
+        .day-cell.empty {
+            background: transparent;
+            border: none;
+            cursor: default;
+        }
+
+        .status-P { background-color: var(--present); color: white; border-color: var(--present); }
+        .status-A { background-color: var(--absent); color: white; border-color: var(--absent); }
+        .status-L { background-color: var(--late); color: white; border-color: var(--late); }
+
+        .legend {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 16px;
+            font-size: 0.85rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .dot-p { background: var(--present); }
+        .dot-a { background: var(--absent); }
+        .dot-l { background: var(--late); }
+
+        .save-btn {
+            background: #16a34a;
+            color: white;
+            border: none;
+            padding: 14px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .save-btn:active {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>Attendance Tracker</h2>
+    </div>
+
+    <!-- Student Management Card -->
+    <div class="card">
+        <label for="studentSelect">Select Student</label>
+        <select id="studentSelect" onchange="renderCalendar()"></select>
+
+        <label>Add New Student</label>
+        <div class="student-controls">
+            <input type="text" id="newStudentName" placeholder="Enter student name">
+            <button onclick="addStudent()">Add</button>
+        </div>
+    </div>
+
+    <!-- Calendar Card -->
+    <div class="card">
+        <div class="calendar-header">
+            <button onclick="changeMonth(-1)">&lt;</button>
+            <h3 id="monthYearDisplay"></h3>
+            <button onclick="changeMonth(1)">&gt;</button>
+        </div>
+
+        <div class="calendar-grid" id="calendarGrid"></div>
+
+        <div class="legend">
+            <div class="legend-item"><div class="dot dot-p"></div> Present (P)</div>
+            <div class="legend-item"><div class="dot dot-a"></div> Absent (A)</div>
+            <div class="legend-item"><div class="dot dot-l"></div> Late (L)</div>
+        </div>
+    </div>
+
+    <!-- Save File Button -->
+    <button class="save-btn" onclick="saveFileToPhone()">Save & Embed Data to Phone</button>
+
+    <!-- Embedded Data Container -->
+    <script id="embedded-data" type="application/json">
+    {
+        "students": ["Student 1"],
+        "attendance": {}
+    }
+    </script>
+
+    <script>
+        // Load embedded data from the DOM
+        let appData = JSON.parse(document.getElementById('embedded-data').textContent);
+        
+        let currentDate = new Date();
+        let selectedStudent = "";
+
+        const monthNames = ["January", "February", "March", "April", "May", "June", 
+                            "July", "August", "September", "October", "November", "December"];
+
+        function init() {
+            updateStudentSelect();
+            renderCalendar();
+        }
+
+        function updateStudentSelect() {
+            const select = document.getElementById('studentSelect');
+            select.innerHTML = '';
+            
+            if (appData.students.length === 0) {
+                select.innerHTML = '<option value="">-- No Students Added --</option>';
+                selectedStudent = "";
+                return;
+            }
+
+            appData.students.forEach(student => {
+                const opt = document.createElement('option');
+                opt.value = student;
+                opt.textContent = student;
+                select.appendChild(opt);
+            });
+
+            if (!selectedStudent || !appData.students.includes(selectedStudent)) {
+                selectedStudent = appData.students[0];
+            }
+            select.value = selectedStudent;
+        }
+
+        function addStudent() {
+            const input = document.getElementById('newStudentName');
+            const name = input.value.trim();
+            if (name && !appData.students.includes(name)) {
+                appData.students.push(name);
+                selectedStudent = name;
+                input.value = '';
+                updateStudentSelect();
+                renderCalendar();
+            }
+        }
+
+        function changeMonth(delta) {
+            currentDate.setMonth(currentDate.getMonth() + delta);
+            renderCalendar();
+        }
+
+        function renderCalendar() {
+            selectedStudent = document.getElementById('studentSelect').value;
+            const grid = document.getElementById('calendarGrid');
+            const monthDisplay = document.getElementById('monthYearDisplay');
+            grid.innerHTML = '';
+
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+
+            monthDisplay.textContent = `${monthNames[month]} ${year}`;
+
+            // Add Day Labels
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            days.forEach(d => {
+                const el = document.createElement('div');
+                el.className = 'day-name';
+                el.textContent = d;
+                grid.appendChild(el);
+            });
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const totalDays = new Date(year, month + 1, 0).getDate();
+
+            // Empty cells for alignment
+            for (let i = 0; i < firstDay; i++) {
+                const empty = document.createElement('div');
+                empty.className = 'day-cell empty';
+                grid.appendChild(empty);
+            }
+
+            // Fill calendar days
+            for (let day = 1; day <= totalDays; day++) {
+                const cell = document.createElement('div');
+                cell.className = 'day-cell';
+                cell.textContent = day;
+
+                const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                
+                // Get status for selected student on this date
+                const status = appData.attendance[selectedStudent]?.[dateKey] || '';
+                if (status) {
+                    cell.classList.add(`status-${status}`);
+                }
+
+                cell.onclick = () => toggleAttendance(dateKey);
+                grid.appendChild(cell);
+            }
+        }
+
+        function toggleAttendance(dateKey) {
+            if (!selectedStudent) return;
+
+            if (!appData.attendance[selectedStudent]) {
+                appData.attendance[selectedStudent] = {};
+            }
+
+            const currentStatus = appData.attendance[selectedStudent][dateKey] || '';
+            let nextStatus = '';
+
+            // Cycle through statuses: None -> P -> A -> L -> None
+            if (currentStatus === '') nextStatus = 'P';
+            else if (currentStatus === 'P') nextStatus = 'A';
+            else if (currentStatus === 'A') nextStatus = 'L';
+            else if (currentStatus === 'L') nextStatus = '';
+
+            if (nextStatus) {
+                appData.attendance[selectedStudent][dateKey] = nextStatus;
+            } else {
+                delete appData.attendance[selectedStudent][dateKey];
+            }
+
+            renderCalendar();
+        }
+
+        function saveFileToPhone() {
+            // Update the JSON contents inside the embedded script tag before saving
+            const dataScript = document.getElementById('embedded-data');
+            dataScript.textContent = '\n' + JSON.stringify(appData, null, 4) + '\n    ';
+
+            // Extract the entire current HTML document string
+            const htmlContent = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+
+            // Create a downloadable Blob file
+            const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "index.html";
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        init();
+    </script>
+</body>
+</html>
